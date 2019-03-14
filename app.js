@@ -1,5 +1,3 @@
-//jshint esversion:6
-
 const express = require("express");
 const bodyParser = require("body-parser");
 const mongooes = require("mongoose");
@@ -41,7 +39,7 @@ const listModel = mongooes.model("List", listSchema);
 app.get("/", function (req, res) {
     itemModel.find({}, (err, foundItems) => {
 
-        // save items to "Item" inside "todolistDB"
+        // save items to "Item" (empty) inside "todolistDB"
         if (foundItems.length === 0) {
             itemModel.insertMany(defaultItems, (err) => {
                 if (err) {
@@ -51,29 +49,55 @@ app.get("/", function (req, res) {
                 }
             });
         }
+
         res.render("list", {listTitle: "Today", newListItems: foundItems});
     });
 });
 
 app.post("/", function (req, res) {
-
     const itemName = req.body.newItem;
-
+    const listName = req.body.list;
     const newItem = new itemModel({name: itemName});
 
-    newItem.save();
-    res.redirect('/');
+    if (listName === "Today") {
+        newItem.save(); // save "newItem" into "Item" inside "todoListDB"
+        res.redirect('/');
+    } else {
+        listModel.findOne({name: listName}, (err, result) => {
+            if (err) {
+                console.log(err);
+            } else {
+                result.items.push(newItem);
+                result.save();
+            }
+        });
+        res.redirect("/" + listName);
+    }
 });
 
 app.post("/delete", function (req, res) {
-    itemModel.deleteOne({name: req.body.checkbox}, (err) => {
-        if (err) {
-            console.log(err);
-        } else {
-            console.log("Successfully removed item " + "\"" + req.body.checkbox + "\"" + " from DB");
-        }
-    });
-    res.redirect('/');
+    const listName = req.body.listTitle;
+    const itemName = req.body.checkbox;
+
+    if (listName === "Today") {
+        itemModel.deleteOne({name: itemName}, (err) => {
+            if (err) {
+                console.log(err);
+            } else {
+                console.log("Successfully removed item " + "\"" + itemName + "\"" + " from DB");
+            }
+        });
+        res.redirect('/');
+    } else {
+        // find the item and remove it
+        // $pull operator removes from an existing array all instances of a value or values that match a specified condition
+        listModel.findOneAndUpdate({name: listName}, {$pull: {items: {name: itemName}}}, (err) => {
+            if (!err) {
+                res.redirect('/' + listName);
+            }
+        });
+
+    }
 });
 
 app.get("/work", function (req, res) {
@@ -85,25 +109,31 @@ app.get("/about", function (req, res) {
 });
 
 app.get("/:customListName", (req, res) => {
-    const customListName = req.params.customListName;
+    const customListName = req.params.customListName.charAt(0).toUpperCase() +
+                            req.params.customListName.slice(1).toLowerCase();
 
-    // check whether there's a list that has the same name as the new "customListName"
-    listModel.find({name: customListName}, (err, results) => {
-        if (err) {
-            console.log(err);
-        } else {
-            if (results.length === 0) {
-                new listModel({
-                    name: customListName,
-                    items: defaultItems
-                }).save();
-                res.redirect('/');
+    // fix multiple "today"
+    if (customListName === "Today") {
+        res.redirect('/');
+    } else {
+        // check whether there's a list that has the same name as the new "customListName"
+        listModel.find({name: customListName}, (err, results) => {
+            if (err) {
+                console.log(err);
             } else {
-                res.render("List", {listTitle: results[0].name, newListItems: results[0].items});
-                console.log('Duplicate the List');
+                if (results.length === 0) {
+                    new listModel({
+                        name: customListName,
+                        items: defaultItems
+                    }).save();
+                    res.redirect('/');
+                } else {
+                    res.render("list", {listTitle: results[0].name, newListItems: results[0].items});
+                    console.log('Duplicate the List');
+                }
             }
-        }
-    });
+        });
+    }
 });
 
 app.listen(3000, function () {
