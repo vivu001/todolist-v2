@@ -126,7 +126,7 @@ app.get("/:customListName", (req, res) => {
                         name: customListName,
                         items: defaultItems
                     }).save();
-                    res.redirect('/');
+                    res.render('list', {listTitle: customListName});
                 } else {
                     res.render("list", {listTitle: results[0].name, newListItems: results[0].items});
                     console.log('Duplicate the List');
